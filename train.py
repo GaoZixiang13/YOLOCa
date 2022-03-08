@@ -77,9 +77,9 @@ basic_lr_per_img = 0.01 / 64.0
 LR = basic_lr_per_img * BATCH_SIZE
 use_cosine = False
 # 训练的世代数
-warmup_epoch = 2
+warmup_epoch = 1
 start_epoch = 0
-EPOCH = 100
+EPOCH = 70
 # 图片原来的size
 pic_shape = 1024
 # 网络输入图片size
@@ -93,6 +93,7 @@ CUDA = True
 # 是否载入预训练模型参数
 use_pretrain = False
 Parallel = False
+# gpu
 gpu_device_id = 1
 # ---------------------------------------------------------------
 
@@ -119,9 +120,9 @@ val_loader = DataLoader(
 model = yolox.yolox(num_classes)
 
 if use_pretrain:
-    LR = 1.288e-5
+    LR = 7.61e-6
     model_path = '/home/b201/gzx/yolox_self/logs/' \
-                 'val_loss3.520-size640-lr0.00001288-ep050-train_loss3.491.pth'
+                 'val_loss3.507-size640-lr0.00000761-ep055-train_loss3.465.pth'
 else:
     model_path = ''
 

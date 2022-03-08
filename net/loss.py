@@ -17,21 +17,24 @@ class yolox_loss(nn.Module):
         # self.cal1 = torch.tensor([1]).to(self.device)
         self.cal_input = torch.tensor([self.input_shape]).to(self.device)
         self.label_smoothing = label_smoothing
-
-    def clip_by_tensor(self, t, t_min, t_max):
-        t = t.float()
-        result = (t >= t_min).float() * t + (t < t_min).float() * t_min
-        result = (result <= t_max).float() * result + (result > t_max).float() * t_max
-        return result
+        self.eps = 1e-8
 
     def MSELoss(self, pred, target):
         return torch.pow(pred - target, 2)
 
     def BCEloss(self, pred, target):
-        epsilon = 1e-7
-        pred = self.clip_by_tensor(pred, epsilon, 1.0 - epsilon)
-        output = - target * torch.log(pred) - (1.0 - target) * torch.log(1.0 - pred)
+        output = - target * torch.log(pred + self.eps) - (1.0 - target) * torch.log(1.0 - pred + self.eps)
         return output
+
+    def Focalloss(self, pred, target):
+        # print(pred.shape == target.shape)
+        alpha, gamma = .25, 2
+
+        noobj_mask = (target == 0)
+        pt = torch.clone(pred)
+        pt[noobj_mask] = 1 - pred[noobj_mask]
+
+        return -alpha * (1 - pt).pow(gamma) * torch.log(pt + self.eps)
 
     def smooth_labels(self, y_true, label_smoothing, num_classes):
         return y_true * (1.0 - label_smoothing) + label_smoothing / num_classes
@@ -82,7 +85,7 @@ class yolox_loss(nn.Module):
             target_mask = targets[b][..., 4] == 1
             gt_tures = targets[b][target_mask]  # .expand(target_mask.size(0), prediction)
             if gt_tures.size(0) == 0:
-                loss_conf += torch.sum(self.BCEloss(prediction_flat[..., 4], self.cal0))
+                loss_conf += torch.sum(self.Focalloss(prediction_flat[..., 4], torch.zeros_like(prediction_flat[..., 4]).to(self.device)))
                 continue
             # print(prediction_flat)
             # print(gt_tures)
@@ -128,13 +131,15 @@ class yolox_loss(nn.Module):
             # 统一处理的代码
             gt_tures_ex = gt_tures.unsqueeze(-2).expand(gt_tures.size(0), prediction_decode.size(0), 5 + self.num_classes) # [gt_tures_preds_mask] # [num_gt, t_num]
             iou = self.cal_iou(gt_tures_ex[..., :4], prediction_decode[..., :4]) # [num_gt, num_pred]
-            iou_cost = -torch.log(iou + 1e-8)
-            cls_loss = self.BCEloss(gt_tures_ex[..., 5:], prediction_decode[..., 5:]).sum(-1) # [num_gt, num_pred]
+            iou_cost = -torch.log(iou + self.eps)
+            prediction_decode_t = prediction_decode.unsqueeze(0).expand(gt_tures.size(0), prediction_decode.size(0), 5 + self.num_classes)
+            cls_loss = self.Focalloss(prediction_decode_t[..., 5:], gt_tures_ex[..., 5:]).sum(-1) # [num_gt, num_pred]
             # gt_pred_zs = torch.minimum(gt_tures_ex[..., :2]-0.5*gt_tures_ex[..., 2:4], prediction_decode[..., :2]-0.5*prediction_decode[..., 2:4])
             # gt_pred_yx = torch.maximum(gt_tures_ex[..., :2]+0.5*gt_tures_ex[..., 2:4], prediction_decode[..., :2]+0.5*prediction_decode[..., 2:4])
             # gt_pred_c2 = (gt_pred_yx - gt_pred_zs).pow(2).sum(-1)
             dis2_gt_center = (gt_tures_ex[..., :2] - prediction_decode[..., :2]).pow(2).sum(-1).pow(0.5)
             cost_dis = dis2_gt_center / (self.dis * (2**0.5))
+            cost_dis = - torch.log(1 - cost_dis + self.eps)
             # del gt_pred_zs, gt_pred_yx, gt_pred_c2, dis2_gt_center
             '''
             3, 10为超参数，根据不同的数据集取值
@@ -165,7 +170,7 @@ class yolox_loss(nn.Module):
 
             # cls_mask = (~gt_tures_preds_last_mask & gt_tures_preds_mask_or).sum(0)
 
-            loss_conf += torch.sum(self.BCEloss(prediction_decode[..., 4], gt_tures_preds_last_mask_calconf.int()))
+            loss_conf += torch.sum(self.Focalloss(prediction_decode[..., 4], gt_tures_preds_last_mask_calconf.int()))
             loss_cls += torch.sum(cls_loss[gt_tures_preds_last_mask])# + torch.sum(self.BCEloss(prediction_decode[cls_mask][..., 5:], self.cal0))
             loss_reg += torch.sum(1 - iou[gt_tures_preds_last_mask] ** 2)
             num_fg = torch.sum(gt_tures_preds_last_mask.sum(0) == True).item()
@@ -192,7 +197,7 @@ class yolox_loss(nn.Module):
 
         return Intersection/torch.clamp(Union, 1e-6)
 
-# ------------------------------------------------------------------------------------------
+# ----------------------------------------------------------------------------------------------------------------------
 # 挨个处理试试会不会更快
 # for num, s_gt_trues in enumerate(gt_tures):
 #     prediction_this_gt_or = prediction_decode[gt_tures_preds_mask_or]
@@ -247,6 +252,6 @@ class yolox_loss(nn.Module):
 #     loss_reg += torch.sum(1 - iou[gt_tures_preds_last_mask] ** 2)
 #     num_fg = torch.sum(gt_tures_preds_last_mask.sum(0) == True).item()
 #     num_fgs += num_fg
-# ------------------------------------------------------------------------------------------
+# ----------------------------------------------------------------------------------------------------------------------
 
 

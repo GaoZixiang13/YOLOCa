@@ -17,15 +17,15 @@ x_test_path = glob.glob('/home/b201/gzx/yolov4_self_0/test/*.jpg')
 print(x_test_path)
 
 CUDA = True
-NMS_hold = 0.3
-conf_hold = 0.35
+NMS_hold = 0.45
+conf_hold = 0.5
 pic_shape = 1024
 input_shape = 640
 num_classes = 1
 gpu_device_id = 0
 Parallel = False
 strides = (8, 16, 32)
-single_img = True
+single_img = False
 
 # font = ImageFont.truetype(r'/home/b201/gzx/yolox_self/font/STSONG.TTF', 12)
 
@@ -38,7 +38,7 @@ single_img = True
 device = torch.device("cuda:%d" % gpu_device_id if torch.cuda.is_available() else "cpu")
 model = yolox.yolox(1)
 model_path = '/home/b201/gzx/yolox_self/logs/' \
-             'val_loss3.439-size640-lr0.00000449-ep060-train_loss3.367.pth'
+             'center_stride_2_loss3.464'
 load_model.load_model(model, model_path)
 
 if Parallel:
@@ -101,7 +101,7 @@ def image_preprocess_test(img_path):
 FPS = 0
 model.eval()
 if single_img:
-    img_path = '/home/b201/gzx/global-wheat-detection/train/0c06dde5b.jpg'
+    img_path = '/home/b201/gzx/global-wheat-detection/train/f2bfe5abb.jpg'
     img = image_preprocess_test(img_path).type(torch.FloatTensor).unsqueeze(0)
     if CUDA:
         img = img.to(device)
@@ -148,7 +148,7 @@ if single_img:
         draw.text((b[0] - b[2] / 2, b[1] - b[3] / 2), 'wheat {:.2f}'.format(b[4] * b[5] * 100), fill='red')
         # draw.text((b[0] - b[2] / 2, b[1] - b[2] / 2), '{:.2f}'.format(b[4] * b[5] * 100), fill='red', stroke_width=1)
 
-    image.save('/home/b201/gzx/yolox_self/test1.jpg')
+    image.save('/home/b201/gzx/yolox_self/test3.jpg')
     print('FPS为%.2f' % FPS)
 
 else:

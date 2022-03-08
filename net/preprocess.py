@@ -76,7 +76,7 @@ class yolodataset(Dataset):
         img, labels = self.mirror_h(img, labels)
         img, labels = self.randomRotation(img, labels)
         # --------------------------------------------------------
-        # strong data augmentation including Morsic, CutMix etc.
+        # strong data augmentation including Mosaic, CutMix etc.
 
         # --------------------------------------------------------
         img = img.resize((self.input_shape, self.input_shape), Image.BICUBIC)

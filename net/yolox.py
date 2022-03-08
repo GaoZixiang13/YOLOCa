@@ -43,9 +43,12 @@ class yolox_head(nn.Module):
 
     def forward(self, x):
         x = self.conv0(x)
+
         out1 = self.conv0_1(x)
         out1 = self.conv0_2(out1)
         cls = self.cls(out1)
+        # obj = self.obj(out1)
+
         out2 = self.conv1_1(x)
         out2 = self.conv1_2(out2)
         reg = self.reg(out2) # 就将w, h设定为针对整张图片
@@ -153,3 +156,4 @@ def weights_init(net, init_type='normal', init_gain = 0.02):
             torch.nn.init.constant_(m.bias.data, 0.0)
     print('initialize network with %s type' % init_type)
     net.apply(init_func)
+

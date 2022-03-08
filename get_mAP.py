@@ -48,7 +48,7 @@ def decode(prediction, l_size, stride):
 
     return prediction
 
-def get_AP(preds, targets):
+def get_AP(preds, targets, threshold):
     if targets.size(0) == 0:
         return 1 if preds.size(0) == 0 else 0
     preds_ex = preds.unsqueeze(-2).expand(preds.size(0), targets.size(0), 5 + num_classes)
@@ -60,13 +60,13 @@ def get_AP(preds, targets):
     hit = 0
     points = [[0, 1]]
     for i, iou_s in enumerate(iou):
-        if iou_s > pred_gt_cal_pr:
+        if iou_s > threshold:
             if hitted[iou_t_idx[i]] == 0:
                 hit += 1
                 r = hit / n
                 p = hit / (i+1)
                 points.append([r, p])
-                hitted[iou_t_idx] = 1
+                hitted[iou_t_idx[i]] = 1
                 if r == 1:
                     break
 
@@ -188,8 +188,8 @@ with open('/home/b201/gzx/yolox_self/val.txt') as f:
         y_test.append(lists)
 
 CUDA = True
-NMS_hold = 0.3
-conf_hold = 0.375
+NMS_hold = 0.45
+conf_hold = 0.5
 pred_gt_cal_pr = 0.5
 pic_shape = 1024
 input_shape = 640
@@ -213,7 +213,7 @@ test_loader = DataLoader(
 
 model = yolox.yolox(1)
 model_path = '/home/b201/gzx/yolox_self/logs/' \
-             'val_loss3.439-size640-lr0.00000449-ep060-train_loss3.367.pth'
+             'center_focal_loss2.057'
 load_model.load_model(model, model_path)
 
 # print('Load weights {}.'.format(model_path))
@@ -229,7 +229,8 @@ if CUDA:
 model.eval()
 # max_p, max_r, max_f1 = 0., 0., 0.
 tol_p, tol_r, tol_f1, tol_s = 0., 0., 0., 0.
-FPS, AP = 0., 0.
+FPS = 0.
+AP = torch.zeros(10)
 with tqdm.tqdm(total=len(test_loader), desc=f'mAP Testing', postfix=dict) as pbar:
     with torch.no_grad():
         for _, (bx, by) in enumerate(test_loader):
@@ -259,10 +260,12 @@ with tqdm.tqdm(total=len(test_loader), desc=f'mAP Testing', postfix=dict) as pba
             gt_tures = by[by[..., 4] == 1].view(-1, 5+num_classes)
 
             if get_ap:
-                # prediction_nmsed = Nms_yolox_self(prediction, NMS_hold)
-                prediction_t = prediction[torch.argsort(prediction[..., 4]*prediction[..., 5], descending=True)]
-                ap = get_AP(prediction_t, gt_tures)
-                AP += ap
+                mask = prediction[..., 4]*prediction[..., 5] > 0.001
+                prediction_nmsed = Nms_yolox_self(prediction[mask], NMS_hold)
+                prediction_t = prediction_nmsed[torch.argsort(prediction_nmsed[..., 4]*prediction_nmsed[..., 5], descending=True)]
+                for num, hold in enumerate(torch.arange(0.5, 0.951, 0.05)):
+                    ap = get_AP(prediction_t, gt_tures, hold)
+                    AP[num] += ap
 
             pred_true_boxes = prediction[prediction[..., 4]*prediction[..., 5] >= conf_hold]
             pred_true_boxes = Nms_yolox_self(pred_true_boxes, NMS_hold)
@@ -285,6 +288,12 @@ ever_s = tol_s / n
 FPS /= len(x_test_path)
 AP /= len(x_test_path)
 
+AP50 = AP[0].item()
+AP75 = AP[5].item()
+AP = (AP.sum(-1)/10).item()
+
 print('test 数据集上得到的P, R, f1, score值, FPS分别为：{:.4f}, {:.4f}, {:.4f}, {:.4f}, {:.2f}'.format(ever_p, ever_r, ever_f1, ever_s, FPS))
-print('mAP为：{:.4f}'.format(AP))
+print('AP为：{:.4f}'.format(AP))
+print('AP50为：{:.4f}'.format(AP50))
+print('AP75为：{:.4f}'.format(AP75))
 
