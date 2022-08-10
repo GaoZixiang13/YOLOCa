@@ -1,6 +1,6 @@
-# Yolox_self
-implement of Yolox,
-It is a baseline of yolox,
+# YoloCa
+implement of YoloCa,
+It is a baseline of yoloCa,
 backbone: Darknet53-spp,
 neck: FPN,
-head: yolox_head,
+head: yoloCa_head,
